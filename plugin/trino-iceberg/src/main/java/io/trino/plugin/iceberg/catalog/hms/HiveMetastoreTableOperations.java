@@ -35,6 +35,7 @@ import java.util.function.BiFunction;
 
 import static com.google.common.base.Preconditions.checkState;
 import static io.trino.metastore.PrincipalPrivileges.NO_PRIVILEGES;
+import static io.trino.metastore.Table.TABLE_COMMENT;
 import static io.trino.plugin.hive.metastore.thrift.ThriftMetastoreUtil.fromMetastoreApiTable;
 import static io.trino.plugin.iceberg.IcebergTableName.tableNameFrom;
 import static io.trino.plugin.iceberg.IcebergUtil.fixBrokenMetadataLocation;
@@ -74,9 +75,66 @@ public class HiveMetastoreTableOperations
     protected void commitToExistingTable(TableMetadata base, TableMetadata metadata)
     {
         Table currentTable = getTable();
-        commitTableUpdate(currentTable, metadata, (table, newMetadataLocation) -> Table.builder(table)
-                .apply(builder -> updateMetastoreTable(builder, metadata, newMetadataLocation, Optional.of(currentMetadataLocation)))
-                .build());
+        if (isCreateOrReplace()) {
+            commitTableReplacement(currentTable, metadata);
+        }
+        else {
+            commitTableUpdate(currentTable, metadata, (table, newMetadataLocation) -> Table.builder(table)
+                    .apply(builder -> updateMetastoreTable(builder, metadata, newMetadataLocation, Optional.of(currentMetadataLocation)))
+                    .build());
+        }
+    }
+
+    private void commitTableReplacement(Table existingTable, TableMetadata metadata)
+    {
+        String newMetadataLocation = writeNewMetadata(metadata, version.orElseThrow() + 1);
+
+        boolean lockingEnabled = parseBoolean(existingTable.getParameters().getOrDefault(HIVE_LOCK_ENABLED, Boolean.toString(this.lockingEnabled)));
+        HiveLock hiveLock = lockingEnabled ? new ThriftMetastoreLock(existingTable) : new NoLock();
+        hiveLock.acquire();
+
+        try {
+            Table currentTable = fromMetastoreApiTable(thriftMetastore.getTable(database, existingTable.getTableName())
+                    .orElseThrow(() -> new TableNotFoundException(getSchemaTableName())));
+
+            checkState(currentMetadataLocation != null, "No current metadata location for existing table");
+            String metadataLocation = fixBrokenMetadataLocation(currentTable.getParameters().get(METADATA_LOCATION_PROP));
+            if (!currentMetadataLocation.equals(metadataLocation)) {
+                throw new CommitFailedException("Metadata location [%s] is not same as table metadata location [%s] for %s",
+                        currentMetadataLocation, metadataLocation, getSchemaTableName());
+            }
+
+            // Deliberately do NOT call setDataColumns() here. For Iceberg tables, HMS column
+            // definitions are not used for reads — the real schema lives in the Iceberg metadata
+            // file. Preserving the existing Hive column types avoids HMS type-compatibility
+            // validation, which rejects column type changes that are valid for CREATE OR REPLACE
+            // TABLE (e.g., INT -> ARRAY(INT)).
+            Table.Builder tableBuilder = Table.builder(currentTable)
+                    .withStorage(storage -> storage.setLocation(metadata.location()))
+                    .setParameter(METADATA_LOCATION_PROP, newMetadataLocation)
+                    .setParameter(PREVIOUS_METADATA_LOCATION_PROP, Optional.of(currentMetadataLocation))
+                    .setParameter(TABLE_COMMENT, Optional.ofNullable(metadata.properties().get(TABLE_COMMENT)));
+            if (metadata.currentSnapshot() != null) {
+                tableBuilder
+                        .setParameter(CURRENT_SNAPSHOT_ID, String.valueOf(metadata.currentSnapshot().snapshotId()))
+                        .setParameter(CURRENT_SNAPSHOT_TIMESTAMP, String.valueOf(metadata.currentSnapshot().timestampMillis()));
+            }
+            Table updatedTable = tableBuilder.build();
+
+            Map<String, String> environmentContext = lockingEnabled ? ImmutableMap.of() : environmentContext(metadataLocation);
+            PrincipalPrivileges privileges = currentTable.getOwner().map(MetastoreUtil::buildInitialPrivilegeSet).orElse(NO_PRIVILEGES);
+            try {
+                metastore.replaceTable(database, tableName, updatedTable, privileges, environmentContext);
+            }
+            catch (RuntimeException e) {
+                throw new CommitStateUnknownException(e);
+            }
+        }
+        finally {
+            hiveLock.release();
+        }
+
+        shouldRefresh = true;
     }
 
     @Override
