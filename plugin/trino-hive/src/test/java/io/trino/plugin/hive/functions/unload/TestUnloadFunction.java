@@ -14,6 +14,7 @@
 package io.trino.plugin.hive.functions.unload;
 
 import com.google.common.collect.ImmutableList;
+import io.trino.plugin.hive.HiveQueryRunner;
 import io.trino.testing.AbstractTestQueryFramework;
 import io.trino.testing.MaterializedResult;
 import io.trino.testing.QueryRunner;
@@ -27,6 +28,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Locale;
 import java.util.stream.Stream;
 
 import static io.trino.plugin.hive.HiveQueryRunner.HIVE_CATALOG;
@@ -55,7 +57,7 @@ public class TestUnloadFunction
     protected QueryRunner createQueryRunner()
             throws Exception
     {
-        return io.trino.plugin.hive.HiveQueryRunner.builder()
+        return HiveQueryRunner.builder()
                 .setInitialTables(ImmutableList.of(NATION))
                 .addHiveProperty("hive.unload-enabled", "true")
                 .setWorkerCount(0)
@@ -108,7 +110,7 @@ public class TestUnloadFunction
     @MethodSource("supportedFormats")
     public void testUnloadWithFormat(String format)
     {
-        String outputDir = tempDir.resolve("unload_format_" + format.toLowerCase()).toUri().toString();
+        String outputDir = tempDir.resolve("unload_format_" + format.toLowerCase(Locale.ROOT)).toUri().toString();
         // CSV only supports unbounded VARCHAR columns, so cast to VARCHAR for CSV
         String inputColumns = "CSV".equals(format) ? "CAST(name AS VARCHAR)" : "nationkey, name";
         MaterializedResult result = computeActual(
@@ -125,7 +127,7 @@ public class TestUnloadFunction
     @MethodSource("unsupportedFormats")
     public void testUnloadWithUnsupportedFormat(String format)
     {
-        String outputDir = tempDir.resolve("unload_unsupported_" + format.toLowerCase()).toUri().toString();
+        String outputDir = tempDir.resolve("unload_unsupported_" + format.toLowerCase(Locale.ROOT)).toUri().toString();
         assertQueryFails(
                 "SELECT * FROM TABLE(hive.system.unload(" +
                         "input => TABLE(SELECT nationkey FROM " + HIVE_CATALOG + ".tpch.nation), " +
@@ -138,7 +140,7 @@ public class TestUnloadFunction
     @MethodSource("columnTypesAndFormats")
     public void testUnloadColumnType(String format, String typeLabel, String columnExpression)
     {
-        String outputDir = tempDir.resolve("unload_type_" + format.toLowerCase() + "_" + typeLabel).toUri().toString();
+        String outputDir = tempDir.resolve("unload_type_" + format.toLowerCase(Locale.ROOT) + "_" + typeLabel).toUri().toString();
         assertQuerySucceeds(
                 "SELECT * FROM TABLE(hive.system.unload(" +
                         "input => TABLE(SELECT " + columnExpression + " AS col), " +

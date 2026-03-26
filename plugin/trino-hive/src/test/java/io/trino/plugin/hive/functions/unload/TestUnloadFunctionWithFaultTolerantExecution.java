@@ -14,6 +14,7 @@
 package io.trino.plugin.hive.functions.unload;
 
 import com.google.common.collect.ImmutableList;
+import io.trino.plugin.hive.HiveQueryRunner;
 import io.trino.testing.AbstractTestQueryFramework;
 import io.trino.testing.MaterializedResult;
 import io.trino.testing.QueryRunner;
@@ -24,6 +25,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Locale;
 
 import static io.trino.plugin.hive.HiveQueryRunner.HIVE_CATALOG;
 import static io.trino.tpch.TpchTable.NATION;
@@ -50,7 +52,7 @@ public class TestUnloadFunctionWithFaultTolerantExecution
     protected QueryRunner createQueryRunner()
             throws Exception
     {
-        return io.trino.plugin.hive.HiveQueryRunner.builder()
+        return HiveQueryRunner.builder()
                 .setInitialTables(ImmutableList.of(NATION))
                 .addHiveProperty("hive.unload-enabled", "true")
                 .addExtraProperty("retry-policy", "TASK")
@@ -77,7 +79,7 @@ public class TestUnloadFunctionWithFaultTolerantExecution
     public void testUnloadMultipleFormatsWithFaultTolerantExecution()
     {
         for (String format : new String[] {"PARQUET", "ORC", "AVRO"}) {
-            String outputDir = tempDir.resolve("unload_fte_" + format.toLowerCase()).toUri().toString();
+            String outputDir = tempDir.resolve("unload_fte_" + format.toLowerCase(Locale.ROOT)).toUri().toString();
             MaterializedResult result = computeActual(
                     "SELECT path, rows_written, bytes_written FROM TABLE(hive.system.unload(" +
                             "input => TABLE(SELECT nationkey, name FROM " + HIVE_CATALOG + ".tpch.nation), " +

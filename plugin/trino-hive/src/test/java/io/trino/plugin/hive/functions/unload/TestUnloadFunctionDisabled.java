@@ -14,6 +14,7 @@
 package io.trino.plugin.hive.functions.unload;
 
 import com.google.common.collect.ImmutableList;
+import io.trino.plugin.hive.HiveQueryRunner;
 import io.trino.testing.AbstractTestQueryFramework;
 import io.trino.testing.QueryRunner;
 import org.junit.jupiter.api.Test;
@@ -49,7 +50,7 @@ public class TestUnloadFunctionDisabled
             throws Exception
     {
         // Default config: hive.unload-enabled is false
-        return io.trino.plugin.hive.HiveQueryRunner.builder()
+        return HiveQueryRunner.builder()
                 .setInitialTables(ImmutableList.of(NATION))
                 .setWorkerCount(0)
                 .build();
