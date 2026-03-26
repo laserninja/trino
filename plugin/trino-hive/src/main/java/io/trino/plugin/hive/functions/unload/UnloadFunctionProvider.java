@@ -16,19 +16,25 @@ package io.trino.plugin.hive.functions.unload;
 import com.google.inject.Inject;
 import com.google.inject.Provider;
 import io.trino.plugin.base.classloader.ClassLoaderSafeConnectorTableFunction;
+import io.trino.plugin.hive.HiveConfig;
 import io.trino.spi.function.table.ConnectorTableFunction;
 
 public class UnloadFunctionProvider
         implements Provider<ConnectorTableFunction>
 {
+    private final HiveConfig hiveConfig;
+
     @Inject
-    public UnloadFunctionProvider() {}
+    public UnloadFunctionProvider(HiveConfig hiveConfig)
+    {
+        this.hiveConfig = hiveConfig;
+    }
 
     @Override
     public ConnectorTableFunction get()
     {
         return new ClassLoaderSafeConnectorTableFunction(
-                new UnloadFunction(),
+                new UnloadFunction(hiveConfig.isUnloadEnabled()),
                 getClass().getClassLoader());
     }
 }

@@ -36,6 +36,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import static io.trino.spi.StandardErrorCode.INVALID_FUNCTION_ARGUMENT;
+import static io.trino.spi.StandardErrorCode.PERMISSION_DENIED;
 import static io.trino.spi.function.table.ReturnTypeSpecification.GenericTable.GENERIC_TABLE;
 import static io.trino.spi.type.BigintType.BIGINT;
 import static io.trino.spi.type.VarcharType.VARCHAR;
@@ -49,7 +50,9 @@ public class UnloadFunction
     private static final String LOCATION_ARGUMENT = "LOCATION";
     private static final String FORMAT_ARGUMENT = "FORMAT";
 
-    public UnloadFunction()
+    private final boolean unloadEnabled;
+
+    public UnloadFunction(boolean unloadEnabled)
     {
         super(
                 "system",
@@ -69,6 +72,7 @@ public class UnloadFunction
                                 .defaultValue(null)
                                 .build()),
                 GENERIC_TABLE);
+        this.unloadEnabled = unloadEnabled;
     }
 
     @Override
@@ -78,6 +82,10 @@ public class UnloadFunction
             Map<String, Argument> arguments,
             ConnectorAccessControl accessControl)
     {
+        if (!unloadEnabled) {
+            throw new TrinoException(PERMISSION_DENIED, "unload table function is disabled");
+        }
+
         String location = getStringArgument(arguments, LOCATION_ARGUMENT);
         if (location.isEmpty()) {
             throw new TrinoException(INVALID_FUNCTION_ARGUMENT, "location must not be empty");
