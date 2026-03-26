@@ -17,6 +17,7 @@ import com.google.inject.Inject;
 import io.trino.plugin.hive.HiveFileWriterFactory;
 import io.trino.plugin.hive.functions.unload.UnloadFunctionDataProcessor;
 import io.trino.plugin.hive.functions.unload.UnloadFunctionHandle;
+import io.trino.spi.connector.ConnectorSession;
 import io.trino.spi.function.FunctionProvider;
 import io.trino.spi.function.table.ConnectorTableFunctionHandle;
 import io.trino.spi.function.table.TableFunctionDataProcessor;
@@ -41,8 +42,8 @@ public class HiveFunctionProvider
     @Override
     public TableFunctionProcessorProviderFactory getTableFunctionProcessorProviderFactory(ConnectorTableFunctionHandle functionHandle)
     {
-        if (functionHandle instanceof UnloadFunctionHandle) {
-            return () -> new UnloadProcessorProvider(fileWriterFactories, (UnloadFunctionHandle) functionHandle);
+        if (functionHandle instanceof UnloadFunctionHandle unloadFunctionHandle) {
+            return () -> new UnloadProcessorProvider(fileWriterFactories, unloadFunctionHandle);
         }
         throw new UnsupportedOperationException("Unsupported function: " + functionHandle);
     }
@@ -52,7 +53,7 @@ public class HiveFunctionProvider
     {
         @Override
         public TableFunctionDataProcessor getDataProcessor(
-                io.trino.spi.connector.ConnectorSession session,
+                ConnectorSession session,
                 ConnectorTableFunctionHandle functionHandle)
         {
             return new UnloadFunctionDataProcessor(session, fileWriterFactories, (UnloadFunctionHandle) functionHandle);

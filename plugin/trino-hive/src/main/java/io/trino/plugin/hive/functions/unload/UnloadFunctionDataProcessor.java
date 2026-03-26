@@ -42,6 +42,7 @@ import java.util.UUID;
 
 import static io.airlift.slice.Slices.utf8Slice;
 import static io.trino.plugin.hive.HiveCompressionCodecs.selectCompressionCodec;
+import static io.trino.plugin.hive.HiveErrorCode.HIVE_UNSUPPORTED_FORMAT;
 import static io.trino.plugin.hive.HiveErrorCode.HIVE_WRITER_CLOSE_ERROR;
 import static io.trino.plugin.hive.util.HiveTypeTranslator.toHiveType;
 import static io.trino.plugin.hive.util.SerdeConstants.LIST_COLUMNS;
@@ -137,7 +138,7 @@ public class UnloadFunctionDataProcessor
         }
 
         throw new TrinoException(
-                io.trino.plugin.hive.HiveErrorCode.HIVE_UNSUPPORTED_FORMAT,
+                HIVE_UNSUPPORTED_FORMAT,
                 "No writer available for format: " + storageFormat);
     }
 
