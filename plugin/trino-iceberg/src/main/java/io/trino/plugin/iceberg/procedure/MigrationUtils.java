@@ -77,6 +77,7 @@ import static io.trino.spi.StandardErrorCode.CONSTRAINT_VIOLATION;
 import static io.trino.spi.StandardErrorCode.NOT_FOUND;
 import static io.trino.spi.StandardErrorCode.NOT_SUPPORTED;
 import static java.util.Objects.requireNonNullElse;
+import static java.util.stream.Collectors.joining;
 import static org.apache.iceberg.TableProperties.DEFAULT_NAME_MAPPING;
 import static org.apache.iceberg.mapping.NameMappingParser.toJson;
 
@@ -169,21 +170,41 @@ public final class MigrationUtils
             SchemaTableName targetName,
             String location,
             HiveStorageFormat format,
+            Optional<Map<String, String>> partitionValues,
             RecursiveDirectory recursiveDirectory,
             ExecutorService icebergScanExecutor)
     {
         Table table = catalog.loadTable(session, targetName);
         PartitionSpec partitionSpec = table.spec();
 
-        checkProcedureArgument(partitionSpec.isUnpartitioned(), "The procedure does not support partitioned tables");
+        Optional<StructLike> partition;
+        if (partitionSpec.isUnpartitioned()) {
+            partition = Optional.empty();
+        }
+        else {
+            checkProcedureArgument(partitionValues.isPresent(), "partition argument must be provided for partitioned tables");
+            partition = Optional.of(buildPartitionData(partitionSpec, partitionValues.get()));
+        }
 
         try {
-            List<DataFile> dataFiles = buildDataFilesFromLocation(fileSystem, recursiveDirectory, format, location, partitionSpec, Optional.empty(), table.schema());
+            List<DataFile> dataFiles = buildDataFilesFromLocation(fileSystem, recursiveDirectory, format, location, partitionSpec, partition, table.schema());
             addFiles(session, table, dataFiles, icebergScanExecutor);
         }
         catch (Exception e) {
             throw new TrinoException(ICEBERG_COMMIT_ERROR, "Failed to add files: " + requireNonNullElse(e.getMessage(), e), e);
         }
+    }
+
+    private static StructLike buildPartitionData(PartitionSpec partitionSpec, Map<String, String> partitionValues)
+    {
+        String partitionPath = partitionSpec.fields().stream()
+                .map(field -> {
+                    String value = partitionValues.get(field.name());
+                    checkProcedureArgument(value != null, "Missing partition value for field: %s", field.name());
+                    return field.name() + "=" + value;
+                })
+                .collect(joining("/"));
+        return DataFiles.data(partitionSpec, partitionPath);
     }
 
     private static List<DataFile> buildDataFilesFromLocation(

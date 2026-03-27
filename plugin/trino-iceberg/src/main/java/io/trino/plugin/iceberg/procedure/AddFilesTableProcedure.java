@@ -14,11 +14,16 @@
 package io.trino.plugin.iceberg.procedure;
 
 import com.google.common.collect.ImmutableList;
+import com.google.inject.Inject;
 import com.google.inject.Provider;
 import io.trino.plugin.hive.HiveStorageFormat;
 import io.trino.plugin.iceberg.procedure.MigrationUtils.RecursiveDirectory;
 import io.trino.spi.connector.TableProcedureMetadata;
 import io.trino.spi.session.PropertyMetadata;
+import io.trino.spi.type.MapType;
+import io.trino.spi.type.TypeManager;
+
+import java.util.Map;
 
 import static io.trino.plugin.base.util.Procedures.checkProcedureArgument;
 import static io.trino.plugin.hive.HiveStorageFormat.AVRO;
@@ -28,10 +33,20 @@ import static io.trino.plugin.iceberg.procedure.IcebergTableProcedureId.ADD_FILE
 import static io.trino.spi.connector.TableProcedureExecutionMode.coordinatorOnly;
 import static io.trino.spi.session.PropertyMetadata.enumProperty;
 import static io.trino.spi.session.PropertyMetadata.stringProperty;
+import static io.trino.spi.type.VarcharType.VARCHAR;
+import static java.util.Objects.requireNonNull;
 
 public class AddFilesTableProcedure
         implements Provider<TableProcedureMetadata>
 {
+    private final TypeManager typeManager;
+
+    @Inject
+    public AddFilesTableProcedure(TypeManager typeManager)
+    {
+        this.typeManager = requireNonNull(typeManager, "typeManager is null");
+    }
+
     @Override
     public TableProcedureMetadata get()
     {
@@ -51,6 +66,15 @@ public class AddFilesTableProcedure
                                 null,
                                 value -> checkProcedureArgument(value == ORC || value == PARQUET || value == AVRO, "The procedure does not support storage format: %s", value),
                                 false))
+                        .add(new PropertyMetadata<>(
+                                "partition",
+                                "Partition values",
+                                new MapType(VARCHAR, VARCHAR, typeManager.getTypeOperators()),
+                                Map.class,
+                                null,
+                                true,
+                                object -> (Map<?, ?>) object,
+                                Object::toString))
                         .add(enumProperty(
                                 "recursive_directory",
                                 "Recursive directory",

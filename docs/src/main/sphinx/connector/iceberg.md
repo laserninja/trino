@@ -703,7 +703,7 @@ a object storage path specified with the required `location` parameter. The
 files must use the specified `format`, with `ORC` and `PARQUET` as valid values.
 The target Iceberg table must use the same format as the added files. The
 procedure does not validate file schemas for compatibility with the target
-Iceberg table. The `location` property is supported for partitioned tables.
+Iceberg table.
 
 The following examples copy `ORC`-format files from the location
 `s3://my-bucket/a/path` into the Iceberg table `iceberg_customer_orders` in the
@@ -714,6 +714,18 @@ ALTER TABLE example.lakehouse.iceberg_customer_orders
 EXECUTE add_files(
     location => 's3://my-bucket/a/path',
     format => 'ORC');
+```
+
+For partitioned tables, use the `partition` argument to specify the partition
+values for the added files. The partition values are specified as a map of
+partition field names to their values:
+
+```sql
+ALTER TABLE example.lakehouse.iceberg_customer_orders
+EXECUTE add_files(
+    location => 's3://my-bucket/a/path',
+    format => 'ORC',
+    partition => map(ARRAY['region', 'country'], ARRAY['ASIA', 'JAPAN']));
 ```
 
 (iceberg-functions)=

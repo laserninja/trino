@@ -16,15 +16,19 @@ package io.trino.plugin.iceberg.procedure;
 import io.trino.plugin.hive.HiveStorageFormat;
 import io.trino.plugin.iceberg.procedure.MigrationUtils.RecursiveDirectory;
 
+import java.util.Map;
+import java.util.Optional;
+
 import static java.util.Objects.requireNonNull;
 
-public record IcebergAddFilesHandle(String location, HiveStorageFormat format, RecursiveDirectory recursiveDirectory)
+public record IcebergAddFilesHandle(String location, HiveStorageFormat format, Optional<Map<String, String>> partitionValues, RecursiveDirectory recursiveDirectory)
         implements IcebergProcedureHandle
 {
     public IcebergAddFilesHandle
     {
         requireNonNull(location, "location is null");
         requireNonNull(format, "format is null");
+        requireNonNull(partitionValues, "partitionValues is null");
         requireNonNull(recursiveDirectory, "recursiveDirectory is null");
     }
 }

@@ -1748,16 +1748,28 @@ public class IcebergMetadata
 
         String location = (String) requireProcedureArgument(executeProperties, "location");
         HiveStorageFormat format = (HiveStorageFormat) requireProcedureArgument(executeProperties, "format");
+        @SuppressWarnings("unchecked")
+        Map<String, String> partitionValues = (Map<String, String>) executeProperties.get("partition");
         RecursiveDirectory recursiveDirectory = (RecursiveDirectory) executeProperties.getOrDefault("recursive_directory", "fail");
 
         Table icebergTable = catalog.loadTable(session, tableHandle.getSchemaTableName());
 
         verifyTableVersionForExecute(ADD_FILES, 2, icebergTable);
 
+        PartitionSpec partitionSpec = icebergTable.spec();
+        if (partitionSpec.isPartitioned()) {
+            checkProcedureArgument(partitionValues != null, "partition argument must be provided for partitioned tables");
+            checkProcedureArgument(
+                    partitionValues.size() == partitionSpec.fields().size(),
+                    "partition value count must match partition field count. Expected: %d, got: %d",
+                    partitionSpec.fields().size(),
+                    partitionValues.size());
+        }
+
         return Optional.of(new IcebergTableExecuteHandle(
                 tableHandle.getSchemaTableName(),
                 ADD_FILES,
-                new IcebergAddFilesHandle(location, format, recursiveDirectory),
+                new IcebergAddFilesHandle(location, format, Optional.ofNullable(partitionValues), recursiveDirectory),
                 icebergTable.location(),
                 icebergTable.io().properties()));
     }
@@ -2348,6 +2360,7 @@ public class IcebergMetadata
                 executeHandle.schemaTableName(),
                 addFilesHandle.location(),
                 addFilesHandle.format(),
+                addFilesHandle.partitionValues(),
                 addFilesHandle.recursiveDirectory(),
                 icebergScanExecutor);
     }

@@ -504,11 +504,80 @@ final class TestIcebergAddFilesProcedure
         String path = (String) computeScalar("SELECT \"$path\" FROM hive.tpch." + hiveTableName);
         String directory = Location.of(path).parentDirectory().toString();
 
+        // Partition argument is required for partitioned tables
         assertQueryFails(
                 "ALTER TABLE " + icebergTableName + " EXECUTE add_files('" + directory + "', 'ORC')",
-                ".*The procedure does not support partitioned tables");
+                ".*partition argument must be provided for partitioned tables");
+
+        // Adding files with partition argument succeeds
+        assertUpdate("ALTER TABLE " + icebergTableName + " EXECUTE add_files(location => '" + directory + "', format => 'ORC', partition => map(ARRAY['part'], ARRAY['added']))");
+        assertQuery("SELECT * FROM " + icebergTableName, "VALUES (1, 'test'), (2, 'added')");
 
         assertUpdate("DROP TABLE hive.tpch." + hiveTableName);
+        assertUpdate("DROP TABLE iceberg.tpch." + icebergTableName);
+    }
+
+    @Test
+    void testAddFilesToPartitionTableFileLocation()
+    {
+        String hiveTableName = "test_add_files_location_" + randomNameSuffix();
+        String icebergTableName = "test_add_files_location_" + randomNameSuffix();
+
+        assertUpdate("CREATE TABLE iceberg.tpch." + icebergTableName + " WITH (partitioning = ARRAY['part']) AS SELECT 1 x, 'test' part", 1);
+        assertUpdate("CREATE TABLE hive.tpch." + hiveTableName + " AS SELECT 2 x", 1);
+
+        String path = (String) computeScalar("SELECT \"$path\" FROM hive.tpch." + hiveTableName);
+
+        assertUpdate("ALTER TABLE " + icebergTableName + " EXECUTE add_files(location => '" + path + "', format => 'ORC', partition => map(ARRAY['part'], ARRAY['added']))");
+        assertQuery("SELECT * FROM " + icebergTableName, "VALUES (1, 'test'), (2, 'added')");
+
+        assertUpdate("DROP TABLE hive.tpch." + hiveTableName);
+        assertUpdate("DROP TABLE iceberg.tpch." + icebergTableName);
+    }
+
+    @Test
+    void testAddFilesToMultiPartitionTable()
+    {
+        String hiveTableName = "test_add_files_multi_part_" + randomNameSuffix();
+        String icebergTableName = "test_add_files_multi_part_" + randomNameSuffix();
+
+        assertUpdate("CREATE TABLE iceberg.tpch." + icebergTableName + "(id int, parent varchar, child varchar) WITH (partitioning = ARRAY['parent', 'child'])");
+        assertUpdate("CREATE TABLE hive.tpch." + hiveTableName + " AS SELECT 1 id", 1);
+
+        String path = (String) computeScalar("SELECT \"$path\" FROM hive.tpch." + hiveTableName);
+
+        assertUpdate("ALTER TABLE " + icebergTableName + " EXECUTE add_files(location => '" + path + "', format => 'ORC', partition => map(ARRAY['parent', 'child'], ARRAY['p1', 'c1']))");
+        assertQuery("SELECT * FROM " + icebergTableName, "VALUES (1, 'p1', 'c1')");
+
+        assertUpdate("DROP TABLE hive.tpch." + hiveTableName);
+        assertUpdate("DROP TABLE iceberg.tpch." + icebergTableName);
+    }
+
+    @Test
+    void testAddFilesToPartitionTableMissingPartition()
+    {
+        String icebergTableName = "test_add_files_missing_part_" + randomNameSuffix();
+
+        assertUpdate("CREATE TABLE iceberg.tpch." + icebergTableName + " WITH (partitioning = ARRAY['part']) AS SELECT 1 x, 'test' part", 1);
+
+        assertQueryFails(
+                "ALTER TABLE " + icebergTableName + " EXECUTE add_files(location => 'file:///tmp', format => 'ORC', partition => map(ARRAY['wrong_field'], ARRAY['value']))",
+                ".*Missing partition value for field: part");
+
+        assertUpdate("DROP TABLE iceberg.tpch." + icebergTableName);
+    }
+
+    @Test
+    void testAddFilesToPartitionTableWrongPartitionCount()
+    {
+        String icebergTableName = "test_add_files_wrong_part_" + randomNameSuffix();
+
+        assertUpdate("CREATE TABLE iceberg.tpch." + icebergTableName + "(id int, parent varchar, child varchar) WITH (partitioning = ARRAY['parent', 'child'])");
+
+        assertQueryFails(
+                "ALTER TABLE " + icebergTableName + " EXECUTE add_files(location => 'file:///tmp', format => 'ORC', partition => map(ARRAY['parent'], ARRAY['p1']))",
+                ".*partition value count must match partition field count.*");
+
         assertUpdate("DROP TABLE iceberg.tpch." + icebergTableName);
     }
 
