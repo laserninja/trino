@@ -13,18 +13,19 @@
  */
 import { afterEach, beforeEach, expect, jest, test } from 'bun:test'
 import { act, createElement } from 'react'
-import { createRoot } from 'react-dom/client'
+import { createRoot, type Root } from 'react-dom/client'
 import { MemoryRouter } from 'react-router-dom'
 import { api } from '../api/base.ts'
+import type { QueryInfo } from '../api/webapp/api.ts'
 import { QueryList } from '../components/QueryList.tsx'
 
-let root
-let container
-let queries
-let requests
-let originalAdapter
+let root: Root
+let container: HTMLDivElement
+let queries: QueryInfo[]
+let requests: number
+let originalAdapter: typeof api.axiosInstance.defaults.adapter
 
-function query(id, cpu) {
+function query(id: string, cpu: number): QueryInfo {
     return {
         queryId: id,
         state: 'RUNNING',
@@ -34,7 +35,58 @@ function query(id, cpu) {
         resourceGroupId: ['global'],
         queryTextPreview: 'SELECT 1',
         clientTags: [],
+        queryType: 'SELECT',
+        memoryPool: 'general',
+        errorType: '',
+        errorCode: { code: '', name: '' },
+        warnings: [],
+        retryPolicy: 'NONE',
+        self: `http://localhost/ui/api/query/${id}`,
+        sessionPrincipal: 'test',
+        queryDataEncoding: '',
+        traceToken: '',
         queryStats: {
+            analysisTime: '0ms',
+            blockedDrivers: 0,
+            endTime: '',
+            failedCpuTime: '0ms',
+            failedCumulativeUserMemory: 0,
+            failedScheduledTime: '0ms',
+            failedTasks: 0,
+            finishingTime: '0ms',
+            internalNetworkInputDataSize: '0B',
+            failedInternalNetworkInputDataSize: '0B',
+            peakUserMemoryReservation: '0B',
+            peakRevocableMemoryReservation: '0B',
+            physicalInputPositions: 0,
+            failedPhysicalInputPositions: 0,
+            physicalInputDataSize: '0B',
+            failedPhysicalInputDataSize: '0B',
+            physicalInputReadTime: '0ms',
+            failedPhysicalInputReadTime: '0ms',
+            physicalWrittenDataSize: '0B',
+            failedPhysicalWrittenDataSize: '0B',
+            internalNetworkInputPositions: 0,
+            failedInternalNetworkInputPositions: 0,
+            planningTime: '0ms',
+            planningCpuTime: '0ms',
+            queuedTime: '0ms',
+            processedInputPositions: 0,
+            failedProcessedInputPositions: 0,
+            processedInputDataSize: '0B',
+            failedProcessedInputDataSize: '0B',
+            outputPositions: 0,
+            failedOutputPositions: 0,
+            outputDataSize: '0B',
+            failedOutputDataSize: '0B',
+            writtenPositions: 0,
+            logicalWrittenDataSize: '0B',
+            runningPercentage: 0,
+            spilledDataSize: '0B',
+            totalDrivers: 0,
+            totalScheduledTime: '0ms',
+            userMemoryReservation: '0B',
+            blockedReasons: [],
             createTime: '2026-01-01T00:00:00Z',
             totalCpuTime: `${cpu}s`,
             elapsedTime: '1s',
@@ -75,16 +127,16 @@ afterEach(async () => {
     jest.useRealTimers()
 })
 
-async function render(interval) {
+async function render(interval: number): Promise<void> {
     localStorage.setItem('reorderInterval', JSON.stringify(interval))
     await act(async () => root.render(createElement(MemoryRouter, null, createElement(QueryList))))
 }
 
-async function tick(milliseconds) {
+async function tick(milliseconds: number): Promise<void> {
     await act(async () => jest.advanceTimersByTime(milliseconds))
 }
 
-function displayedIds() {
+function displayedIds(): (string | null)[] {
     return [...container.querySelectorAll('a[href^="/queries/"]')].map((link) => link.textContent)
 }
 
